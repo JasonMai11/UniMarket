@@ -3,7 +3,9 @@ import Firebase
 import FirebaseFirestore
 
 class ItemViewModel: ObservableObject {
-    @Published var items = [Item]()
+    @Published var items: [Item] = []
+    @Published var isLoading = false
+    @Published var error: Error?
     private let db = Firestore.firestore()
     
     func fetchItems(forUniversity university: String) async {
@@ -21,6 +23,10 @@ class ItemViewModel: ObservableObject {
     }
     
     func createItem(title: String, description: String, price: Double, category: String, condition: String, images: [String], sellerId: String, sellerName: String, university: String) async throws {
+        // Get seller's verification status
+        let userDoc = try await db.collection("users").document(sellerId).getDocument()
+        let isSellerVerified = userDoc.data()?["isVerified"] as? Bool ?? false
+        
         let item = Item(title: title,
                        description: description,
                        price: price,
@@ -31,28 +37,41 @@ class ItemViewModel: ObservableObject {
                        sellerName: sellerName,
                        university: university,
                        status: .available,
-                       datePosted: Date())
+                       datePosted: Date(),
+                       isSellerVerified: isSellerVerified)
         
         let encodedItem = try Firestore.Encoder().encode(item)
         try await db.collection("items").addDocument(data: encodedItem)
         await fetchItems(forUniversity: university)
     }
     
-    func updateItemStatus(itemId: String, newStatus: Item.ItemStatus) async throws {
+    func updateItemStatus(itemId: String, status: Item.ItemStatus) async throws {
+        guard let item = items.first(where: { $0.id == itemId }) else {
+            throw NSError(domain: "ItemViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "Item not found"])
+        }
+        
         try await db.collection("items").document(itemId).updateData([
-            "status": newStatus.rawValue
+            "status": status.rawValue
         ])
         
-        if let university = items.first(where: { $0.id == itemId })?.university {
-            await fetchItems(forUniversity: university)
-        }
+        await fetchItems(forUniversity: item.university)
     }
     
     func deleteItem(itemId: String) async throws {
-        try await db.collection("items").document(itemId).delete()
-        
-        if let university = items.first(where: { $0.id == itemId })?.university {
-            await fetchItems(forUniversity: university)
+        guard let item = items.first(where: { $0.id == itemId }) else {
+            throw NSError(domain: "ItemViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "Item not found"])
         }
+        
+        try await db.collection("items").document(itemId).delete()
+        await fetchItems(forUniversity: item.university)
+    }
+    
+    func fetchUserListings(userId: String) async throws -> [Item] {
+        let snapshot = try await db.collection("items")
+            .whereField("sellerId", isEqualTo: userId)
+            .order(by: "datePosted", descending: true)
+            .getDocuments()
+        
+        return snapshot.documents.compactMap { try? $0.data(as: Item.self) }
     }
 } 

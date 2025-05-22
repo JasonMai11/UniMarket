@@ -2,19 +2,8 @@ import SwiftUI
 
 struct FeedView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @EnvironmentObject var itemViewModel: ItemViewModel
-    @State private var searchText = ""
-    
-    var filteredItems: [Item] {
-        if searchText.isEmpty {
-            return itemViewModel.items
-        } else {
-            return itemViewModel.items.filter { item in
-                item.title.localizedCaseInsensitiveContains(searchText) ||
-                item.description.localizedCaseInsensitiveContains(searchText)
-            }
-        }
-    }
+    @StateObject private var itemViewModel = ItemViewModel()
+    @State private var isLoading = false
     
     var body: some View {
         NavigationView {
@@ -25,38 +14,65 @@ struct FeedView: View {
                             .font(.subheadline)
                             .foregroundColor(.gray)
                             .padding(.horizontal)
+                            .padding(.top, 8)
                     }
                     
-                    LazyVGrid(columns: [
-                        GridItem(.flexible()),
-                        GridItem(.flexible())
-                    ], spacing: 16) {
-                        ForEach(filteredItems) { item in
-                            NavigationLink(destination: ItemDetailView(item: item)) {
-                                ItemCard(item: item)
+                    if isLoading {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.top, 50)
+                    } else if itemViewModel.items.isEmpty {
+                        VStack(spacing: 20) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 50))
+                                .foregroundColor(.gray)
+                            Text("No items found")
+                                .font(.headline)
+                                .foregroundColor(.gray)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.top, 50)
+                    } else {
+                        LazyVGrid(columns: [
+                            GridItem(.flexible()),
+                            GridItem(.flexible())
+                        ], spacing: 16) {
+                            ForEach(itemViewModel.items) { item in
+                                NavigationLink(destination: ItemDetailView(item: item)) {
+                                    ItemCard(item: item)
+                                }
                             }
                         }
+                        .padding()
                     }
-                    .padding()
                 }
             }
-            .navigationTitle("UniMarket")
-            .searchable(text: $searchText, prompt: "Search items")
-            .task {
+            .refreshable {
                 await loadItems()
             }
-            .onAppear {
-                Task {
-                    await loadItems()
-                }
+            .navigationTitle("Listings")
+        }
+        .task {
+            await loadItems()
+        }
+        .onAppear {
+            Task {
+                await loadItems()
             }
         }
     }
     
     private func loadItems() async {
-        if let university = authViewModel.currentUser?.university.name {
-            await itemViewModel.fetchItems(forUniversity: university)
+        guard let university = authViewModel.currentUser?.university.name else {
+            print("DEBUG: No university found for current user")
+            return
         }
+        
+        print("DEBUG: Loading items for university: \(university)")
+        isLoading = true
+        defer { isLoading = false }
+        
+        await itemViewModel.fetchItems(forUniversity: university)
     }
 }
 
@@ -76,17 +92,37 @@ struct ItemCard: View {
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.title)
-                    .font(.headline)
-                    .lineLimit(2)
+                HStack {
+                    Text(item.title)
+                        .font(.headline)
+                        .lineLimit(2)
+                    
+                    if item.isSellerVerified {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundColor(.blue)
+                            .font(.caption)
+                    }
+                }
                 
                 Text("$\(String(format: "%.2f", item.price))")
                     .font(.subheadline)
                     .foregroundColor(.blue)
                 
-                Text(item.condition)
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                HStack {
+                    Text(item.condition)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    
+                    if item.isSellerVerified {
+                        Text("Verified Student")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(4)
+                    }
+                }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)

@@ -6,16 +6,24 @@
 //
 
 import SwiftUI
+import Firebase
 
 struct ContentView: View {
-    @EnvironmentObject var authViewModel: AuthViewModel
+    @StateObject var authViewModel = AuthViewModel()
+    @StateObject var messageViewModel = MessageViewModel()
     
     var body: some View {
         Group {
             if authViewModel.userSession != nil {
                 MainTabView()
+                    .environmentObject(authViewModel)
+                    .environmentObject(messageViewModel)
+                    .task {
+                        await messageViewModel.fetchConversations()
+                    }
             } else {
                 LoginView()
+                    .environmentObject(authViewModel)
             }
         }
     }
@@ -23,47 +31,33 @@ struct ContentView: View {
 
 struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @StateObject private var messageViewModel = MessageViewModel()
+    @EnvironmentObject var messageViewModel: MessageViewModel
     
     var body: some View {
         TabView {
             FeedView()
                 .tabItem {
-                    Image(systemName: "house")
-                    Text("Feed")
+                    Label("Listings", systemImage: "list.bullet")
                 }
             
             MessageView()
                 .tabItem {
-                    Image(systemName: "message")
-                    Text("Messages")
+                    Label("Messages", systemImage: "message")
                 }
-                .badge(messageViewModel.unreadCount)
             
             CreateListingView()
                 .tabItem {
-                    Image(systemName: "plus.circle")
-                    Text("Sell")
+                    Label("Sell", systemImage: "plus.circle")
                 }
             
             ProfileView()
                 .tabItem {
-                    Image(systemName: "person")
-                    Text("Profile")
+                    Label("Profile", systemImage: "person")
                 }
-        }
-        .onAppear {
-            if let userId = authViewModel.currentUser?.id {
-                Task {
-                    await messageViewModel.fetchConversations(forUserId: userId)
-                }
-            }
         }
     }
 }
 
 #Preview {
     ContentView()
-        .environmentObject(AuthViewModel())
-        .environmentObject(ItemViewModel())
 }

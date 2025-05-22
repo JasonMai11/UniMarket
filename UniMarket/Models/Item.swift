@@ -14,6 +14,7 @@ struct Item: Identifiable, Codable {
     var university: String
     var status: ItemStatus
     var datePosted: Date
+    var isSellerVerified: Bool
     
     enum ItemStatus: String, Codable {
         case available
@@ -34,5 +35,6 @@ struct Item: Identifiable, Codable {
         case university
         case status
         case datePosted
+        case isSellerVerified
     }
 } 
