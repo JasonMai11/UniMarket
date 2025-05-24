@@ -11,6 +11,7 @@ import Firebase
 struct ContentView: View {
     @StateObject var authViewModel = AuthViewModel()
     @StateObject var messageViewModel = MessageViewModel()
+    @StateObject var listingViewModel = ListingViewModel()
     
     var body: some View {
         Group {
@@ -18,42 +19,11 @@ struct ContentView: View {
                 MainTabView()
                     .environmentObject(authViewModel)
                     .environmentObject(messageViewModel)
-                    .task {
-                        await messageViewModel.fetchConversations()
-                    }
+                    .environmentObject(listingViewModel)
             } else {
                 LoginView()
                     .environmentObject(authViewModel)
             }
-        }
-    }
-}
-
-struct MainTabView: View {
-    @EnvironmentObject var authViewModel: AuthViewModel
-    @EnvironmentObject var messageViewModel: MessageViewModel
-    
-    var body: some View {
-        TabView {
-            FeedView()
-                .tabItem {
-                    Label("Listings", systemImage: "list.bullet")
-                }
-            
-            MessageView()
-                .tabItem {
-                    Label("Messages", systemImage: "message")
-                }
-            
-            CreateListingView()
-                .tabItem {
-                    Label("Sell", systemImage: "plus.circle")
-                }
-            
-            ProfileView()
-                .tabItem {
-                    Label("Profile", systemImage: "person")
-                }
         }
     }
 }

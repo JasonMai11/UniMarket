@@ -2,6 +2,7 @@ import Foundation
 import Firebase
 import FirebaseFirestore
 import FirebaseAuth
+import UserNotifications
 
 @MainActor
 class MessageViewModel: ObservableObject {
@@ -13,6 +14,68 @@ class MessageViewModel: ObservableObject {
     
     private let db = Firestore.firestore()
     private var messageListener: ListenerRegistration?
+    private var conversationListener: ListenerRegistration?
+    
+    func setupMessageNotifications() {
+        // Remove existing listeners
+        messageListener?.remove()
+        conversationListener?.remove()
+        
+        // Listen for new conversations
+        conversationListener = db.collection("conversations")
+            .whereField("participants.\(Auth.auth().currentUser?.uid ?? "")", isEqualTo: true)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("DEBUG: Failed to listen for conversations: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let documents = snapshot?.documents else { return }
+                
+                // Check for new messages in each conversation
+                for document in documents {
+                    if let unreadCount = document.data()["unreadCount"] as? Int,
+                       unreadCount > 0 {
+                        // Send local notification
+                        self.sendLocalNotification(
+                            title: document.data()["otherUserName"] as? String ?? "New Message",
+                            body: document.data()["lastMessage"] as? String ?? "You have a new message"
+                        )
+                    }
+                }
+            }
+    }
+    
+    private func sendLocalNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("DEBUG: Failed to send notification: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if granted {
+                print("DEBUG: Notification permission granted")
+            } else if let error = error {
+                print("DEBUG: Failed to request notification permission: \(error.localizedDescription)")
+            }
+        }
+    }
     
     func fetchConversations() async {
         guard let userId = Auth.auth().currentUser?.uid else { 
@@ -281,5 +344,6 @@ class MessageViewModel: ObservableObject {
     
     deinit {
         messageListener?.remove()
+        conversationListener?.remove()
     }
 } 
