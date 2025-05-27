@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "default": "messenger-d1e3d",
+    "staging": "unimarket-e55cc",
+    "unimarket": "unimarket-e55cc"
+  },
+  "targets": {},
+  "etags": {}
+}

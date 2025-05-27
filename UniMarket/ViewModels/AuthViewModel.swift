@@ -123,6 +123,11 @@ class AuthViewModel: ObservableObject {
     }
     
     func sendVerificationCode(to email: String) async throws {
+        // Validate that the email is a .edu email
+        guard email.lowercased().hasSuffix(".edu") else {
+            throw NSError(domain: "AuthViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "Please use your university (.edu) email address"])
+        }
+        
         // Generate a random 6-digit code
         let code = String(format: "%06d", Int.random(in: 0...999999))
         
@@ -136,9 +141,8 @@ class AuthViewModel: ObservableObject {
         
         try await db.collection("verificationCodes").document(email).setData(verificationData)
         
-        // TODO: Implement actual email sending service
-        // For now, we'll just print the code
-        print("DEBUG: Verification code for \(email): \(code)")
+        // The Cloud Function will automatically send the email
+        // No need to print the code anymore as it will be sent via email
     }
     
     func verifyEmail(email: String, code: String) async throws {

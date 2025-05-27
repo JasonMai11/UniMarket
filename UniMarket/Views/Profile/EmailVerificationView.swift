@@ -15,6 +15,11 @@ struct EmailVerificationView: View {
         NavigationView {
             Form {
                 Section(header: Text("School Email Verification")) {
+                    Text("Please enter your university (.edu) email address to verify your student status.")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .padding(.vertical, 4)
+                    
                     TextField("School Email", text: $schoolEmail)
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
