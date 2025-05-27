@@ -79,9 +79,28 @@ class AuthViewModel: ObservableObject {
     
     func signOut() {
         do {
+            // Sign out from Firebase Auth
             try auth.signOut()
+            
+            // Clear all local data
             self.userSession = nil
             self.currentUser = nil
+            self.selectedUniversity = nil
+            self.searchQuery = ""
+            self.filteredUniversities = University.universities
+            self.isAuthenticated = false
+            
+            // Clear any cached data
+            URLCache.shared.removeAllCachedResponses()
+            
+            // Clear UserDefaults if you're storing any user-specific data there
+            if let bundleID = Bundle.main.bundleIdentifier {
+                UserDefaults.standard.removePersistentDomain(forName: bundleID)
+            }
+            
+            // Post notification that user has signed out
+            NotificationCenter.default.post(name: .userDidSignOut, object: nil)
+            
         } catch {
             print("DEBUG: Failed to sign out with error \(error.localizedDescription)")
         }
@@ -125,61 +144,74 @@ class AuthViewModel: ObservableObject {
     func sendVerificationCode(to email: String) async throws {
         // Validate that the email is a .edu email
         guard email.lowercased().hasSuffix(".edu") else {
-            throw NSError(domain: "AuthViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "Please use your university (.edu) email address"])
+            throw AuthError.invalidEmail
         }
         
-        // Generate a random 6-digit code
-        let code = String(format: "%06d", Int.random(in: 0...999999))
-        
-        // Store the code in Firestore with a 10-minute expiration
-        let verificationData: [String: Any] = [
-            "code": code,
-            "email": email,
-            "createdAt": Timestamp(),
-            "expiresAt": Timestamp(date: Date().addingTimeInterval(600)) // 10 minutes
-        ]
-        
-        try await db.collection("verificationCodes").document(email).setData(verificationData)
-        
-        // The Cloud Function will automatically send the email
-        // No need to print the code anymore as it will be sent via email
+        do {
+            // Generate a random 6-digit code
+            let code = String(format: "%06d", Int.random(in: 0...999999))
+            
+            // Store the code in Firestore with a 10-minute expiration
+            let verificationData: [String: Any] = [
+                "code": code,
+                "email": email,
+                "createdAt": Timestamp(),
+                "expiresAt": Timestamp(date: Date().addingTimeInterval(600)) // 10 minutes
+            ]
+            
+            try await db.collection("verificationCodes").document(email).setData(verificationData)
+            
+            // The Cloud Function will automatically send the email
+        } catch {
+            print("DEBUG: Failed to send verification code with error \(error.localizedDescription)")
+            throw AuthError.networkError
+        }
     }
     
     func verifyEmail(email: String, code: String) async throws {
-        guard let userId = currentUser?.id else { return }
-        
-        // Get the stored verification code
-        let doc = try await db.collection("verificationCodes").document(email).getDocument()
-        guard let data = doc.data(),
-              let storedCode = data["code"] as? String,
-              let expiresAt = data["expiresAt"] as? Timestamp else {
-            throw NSError(domain: "AuthViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid verification code"])
+        guard let userId = currentUser?.id else {
+            throw AuthError.unknown
         }
         
-        // Check if the code has expired
-        if expiresAt.dateValue() < Date() {
-            throw NSError(domain: "AuthViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "Verification code has expired"])
-        }
-        
-        // Verify the code
-        guard code == storedCode else {
-            throw NSError(domain: "AuthViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid verification code"])
-        }
-        
-        // Update user's verification status
-        try await db.collection("users").document(userId).updateData([
-            "isVerified": true,
-            "verificationEmail": email
-        ])
-        
-        // Delete the used verification code
-        try await db.collection("verificationCodes").document(email).delete()
-        
-        // Update local user object
-        if var user = currentUser {
-            user.isVerified = true
-            user.verificationEmail = email
-            currentUser = user
+        do {
+            // Get the stored verification code
+            let doc = try await db.collection("verificationCodes").document(email).getDocument()
+            guard let data = doc.data(),
+                  let storedCode = data["code"] as? String,
+                  let expiresAt = data["expiresAt"] as? Timestamp else {
+                throw AuthError.invalidCode
+            }
+            
+            // Check if the code has expired
+            if expiresAt.dateValue() < Date() {
+                throw AuthError.codeExpired
+            }
+            
+            // Verify the code
+            guard code == storedCode else {
+                throw AuthError.invalidCode
+            }
+            
+            // Update user's verification status
+            try await db.collection("users").document(userId).updateData([
+                "isVerified": true,
+                "verificationEmail": email
+            ])
+            
+            // Delete the used verification code
+            try await db.collection("verificationCodes").document(email).delete()
+            
+            // Update local user object
+            if var user = currentUser {
+                user.isVerified = true
+                user.verificationEmail = email
+                currentUser = user
+            }
+        } catch let error as AuthError {
+            throw error
+        } catch {
+            print("DEBUG: Failed to verify email with error \(error.localizedDescription)")
+            throw AuthError.networkError
         }
     }
     

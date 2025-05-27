@@ -2,11 +2,45 @@ import Foundation
 import Firebase
 import FirebaseFirestore
 
+@MainActor
 class ItemViewModel: ObservableObject {
     @Published var items: [Item] = []
     @Published var isLoading = false
     @Published var error: Error?
     private let db = Firestore.firestore()
+    private var listenerRegistration: ListenerRegistration?
+    
+    init() {
+        setupSignOutObserver()
+    }
+    
+    deinit {
+        Task { @MainActor in
+            removeListener()
+        }
+    }
+    
+    private func setupSignOutObserver() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSignOut),
+            name: .userDidSignOut,
+            object: nil
+        )
+    }
+    
+    @objc private func handleSignOut() {
+        // Clear all items
+        items.removeAll()
+        
+        // Remove any active listeners
+        removeListener()
+    }
+    
+    private func removeListener() {
+        listenerRegistration?.remove()
+        listenerRegistration = nil
+    }
     
     func fetchItems(forUniversity university: String) async {
         do {

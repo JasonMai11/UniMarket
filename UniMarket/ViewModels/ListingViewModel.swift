@@ -3,11 +3,45 @@ import Firebase
 import FirebaseFirestore
 import FirebaseAuth
 
+@MainActor
 class ListingViewModel: ObservableObject {
     @Published var listings: [Item] = []
     @Published var isLoading = false
     @Published var error: Error?
     private let db = Firestore.firestore()
+    private var listenerRegistration: ListenerRegistration?
+    
+    init() {
+        setupSignOutObserver()
+    }
+    
+    deinit {
+        Task { @MainActor in
+            removeListener()
+        }
+    }
+    
+    private func setupSignOutObserver() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSignOut),
+            name: .userDidSignOut,
+            object: nil
+        )
+    }
+    
+    @objc private func handleSignOut() {
+        // Clear all listings
+        listings.removeAll()
+        
+        // Remove any active listeners
+        removeListener()
+    }
+    
+    private func removeListener() {
+        listenerRegistration?.remove()
+        listenerRegistration = nil
+    }
     
     func fetchListings() async {
         guard let currentUser = Auth.auth().currentUser else { return }

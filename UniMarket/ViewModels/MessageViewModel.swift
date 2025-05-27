@@ -15,6 +15,42 @@ class MessageViewModel: ObservableObject {
     private let db = Firestore.firestore()
     private var messageListener: ListenerRegistration?
     private var conversationListener: ListenerRegistration?
+    private var listenerRegistration: ListenerRegistration?
+    
+    init() {
+        setupSignOutObserver()
+    }
+    
+    deinit {
+        Task { @MainActor in
+            messageListener?.remove()
+            conversationListener?.remove()
+            removeListener()
+        }
+    }
+    
+    private func setupSignOutObserver() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSignOut),
+            name: .userDidSignOut,
+            object: nil
+        )
+    }
+    
+    @objc private func handleSignOut() {
+        // Clear all messages and conversations
+        messages.removeAll()
+        conversations.removeAll()
+        
+        // Remove any active listeners
+        removeListener()
+    }
+    
+    private func removeListener() {
+        listenerRegistration?.remove()
+        listenerRegistration = nil
+    }
     
     func setupMessageNotifications() {
         // Remove existing listeners
@@ -340,10 +376,5 @@ class MessageViewModel: ObservableObject {
         } catch {
             print("DEBUG: Failed to check user verification status: \(error.localizedDescription)")
         }
-    }
-    
-    deinit {
-        messageListener?.remove()
-        conversationListener?.remove()
     }
 } 
