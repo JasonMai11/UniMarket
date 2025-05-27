@@ -68,6 +68,9 @@ class AuthViewModel: ObservableObject {
             
             try await db.collection("users").document(userId).updateData(userData)
             await fetchUser()
+            
+            // Notify that university has changed
+            NotificationCenter.default.post(name: .universityChanged, object: nil)
         } catch {
             print("DEBUG: Failed to update user profile with error \(error.localizedDescription)")
             throw error
@@ -173,6 +176,15 @@ class AuthViewModel: ObservableObject {
             user.isVerified = true
             user.verificationEmail = email
             currentUser = user
+        }
+    }
+    
+    func sendPasswordReset(to email: String) async throws {
+        do {
+            try await auth.sendPasswordReset(withEmail: email)
+        } catch {
+            print("DEBUG: Failed to send password reset with error \(error.localizedDescription)")
+            throw error
         }
     }
 } 

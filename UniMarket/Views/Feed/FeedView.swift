@@ -72,6 +72,11 @@ struct FeedView: View {
             .refreshable {
                 await listingViewModel.fetchListings()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .universityChanged)) { _ in
+                Task {
+                    await listingViewModel.fetchListings()
+                }
+            }
         }
     }
 }

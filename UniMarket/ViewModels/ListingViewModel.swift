@@ -16,7 +16,16 @@ class ListingViewModel: ObservableObject {
         defer { isLoading = false }
         
         do {
+            // Get the current user's university
+            let userDoc = try await db.collection("users").document(currentUser.uid).getDocument()
+            guard let userData = userDoc.data(),
+                  let university = userData["university"] as? String else {
+                print("DEBUG: Failed to get user's university")
+                return
+            }
+            
             let snapshot = try await db.collection("items")
+                .whereField("university", isEqualTo: university)
                 .whereField("status", isEqualTo: Item.ItemStatus.available.rawValue)
                 .order(by: "datePosted", descending: true)
                 .getDocuments()

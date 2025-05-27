@@ -7,6 +7,7 @@ struct LoginView: View {
     @State private var showRegistration = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var showForgotPassword = false
     
     var body: some View {
         NavigationView {
@@ -49,7 +50,14 @@ struct LoginView: View {
                             .cornerRadius(10)
                     }
                 }
-                .padding(.horizontal)
+                
+                // Forgot Password Link
+                Button(action: {
+                    showForgotPassword = true
+                }) {
+                    Text("Forgot Password?")
+                        .foregroundColor(.blue)
+                }
                 
                 // Registration Link
                 Button(action: {
@@ -63,6 +71,9 @@ struct LoginView: View {
             .navigationBarHidden(true)
             .sheet(isPresented: $showRegistration) {
                 RegistrationView()
+            }
+            .sheet(isPresented: $showForgotPassword) {
+                ForgotPasswordView()
             }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) { }

@@ -16,6 +16,11 @@ service cloud.firestore {
         get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants[request.auth.uid] == true;
     }
     
+    function isSameUniversity(university) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.university == university;
+    }
+    
     // Users collection
     match /users/{userId} {
       allow read: if isAuthenticated();
@@ -26,20 +31,26 @@ service cloud.firestore {
     
     // Items collection
     match /items/{itemId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && resource.data.sellerId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.sellerId == request.auth.uid;
+      allow read: if isAuthenticated() && isSameUniversity(resource.data.university);
+      allow create: if isAuthenticated() && isSameUniversity(request.resource.data.university);
+      allow update: if isAuthenticated() && isSameUniversity(resource.data.university) && resource.data.sellerId == request.auth.uid;
+      allow delete: if isAuthenticated() && isSameUniversity(resource.data.university) && resource.data.sellerId == request.auth.uid;
     }
     
     // Messages collection
     match /messages/{messageId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated() && isParticipant(resource.data.conversationId);
+      allow create: if isAuthenticated() && isParticipant(request.resource.data.conversationId);
+      allow update: if isAuthenticated() && isParticipant(resource.data.conversationId);
+      allow delete: if isAuthenticated() && isParticipant(resource.data.conversationId);
     }
     
     // Conversations collection
     match /conversations/{conversationId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated() && isParticipant(conversationId);
+      allow create: if isAuthenticated() && request.resource.data.participants[request.auth.uid] == true;
+      allow update: if isAuthenticated() && isParticipant(conversationId);
+      allow delete: if isAuthenticated() && isParticipant(conversationId);
     }
     
     // Verification codes collection
